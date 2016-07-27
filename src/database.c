@@ -16,7 +16,7 @@ Contributors:
 
 #include <assert.h>
 #include <stdio.h>
-
+#include <stdlib.h>
 #include <config.h>
 
 #include <mosquitto_broker.h>
@@ -821,6 +821,17 @@ int mqtt3_db_message_write(struct mosquitto_db *db, struct mosquitto *context)
 	const void *payload;
 	int msg_count = 0;
     char buf_print[256]={0};
+    char command_str[256]={0};
+    /*
+     * time
+     * */
+    char *wday[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    char flag=0;
+    time_t timep;
+    struct tm *p;
+    char   time_now[64];
+    time(&timep);
+
 
 //    printf("-----mqtt3_db_message_write\n");
 	if(!context || context->sock == INVALID_SOCKET
@@ -834,6 +845,7 @@ int mqtt3_db_message_write(struct mosquitto_db *db, struct mosquitto *context)
 
 	tail = context->msgs;
 	while(tail){
+        flag = 0;
 		if(tail->direction == mosq_md_in){
 			msg_count++;
 		}
@@ -845,10 +857,21 @@ int mqtt3_db_message_write(struct mosquitto_db *db, struct mosquitto *context)
 			qos = tail->qos;
 			payloadlen = tail->store->payloadlen;
 			payload = tail->store->payload;
-            sprintf(buf_print,"--%s",(char*)payload);
+            if(flag == 0){
+            sprintf(buf_print,"%s",(char*)payload);
             printf("-------------%s\n",buf_print);
-    mysql_insert("insert into table_test (content) Values('eeee')",&mysql);
-    mysql_my_query("select * from table_test",&mysql);
+            p = localtime(&timep); //取得当地时间
+            sprintf(time_now,"%d-%02d-%02d %s %02d:%02d:%02d",(1900+p->tm_year),(p->tm_mon),p->tm_mday,wday[p->tm_wday],p->tm_hour,p->tm_min,p->tm_sec);
+            sprintf(command_str,"insert into %s (value,cur_date,cur_time) Values('%.3f',now(),current_time())",topic,atof(tail->store->payload));
+            printf("%s\n%s\n",command_str,tail->store->topic);
+            mysql_insert(command_str,&mysql);
+            flag++;
+            }
+            //mysql_insert("insert into table_test (content) Values('eeee')",&mysql);
+            //mysql_my_query("select * from table_test",&mysql);
+            //sprintf(command_str,"insert into data (topic) Values('%s')",tail->store->topic);
+            //mysql_insert(command_str,&mysql);
+            // printf("%s\n%s\n",command_str,tail->store->topic);
 			switch(tail->state){
 				case mosq_ms_publish_qos0:
 					rc = _mosquitto_send_publish(context, mid, topic, payloadlen, payload, qos, retain, retries);

@@ -77,7 +77,7 @@ int deny_severity = LOG_INFO;
 MYSQL mysql;
 MYSQL_RES *res;
 MYSQL_ROW row;
-MYSQL_CONFIG mysql_config = {"localhost","root","mysql","test1"};
+MYSQL_CONFIG mysql_config = {"localhost","root","mysql","mqtt_data"};
 void handle_sigint(int signal);
 void handle_sigusr1(int signal);
 void handle_sigusr2(int signal);
