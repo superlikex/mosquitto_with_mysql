@@ -77,7 +77,10 @@ int deny_severity = LOG_INFO;
 MYSQL mysql;
 MYSQL_RES *res;
 MYSQL_ROW row;
-MYSQL_CONFIG mysql_config = {"localhost","root","mysql","mqtt_data"};
+//MYSQL_CONFIG mysql_config = {"localhost","root","mysql","mqtt_data"};
+MYSQL_CONFIG mysql_config;
+
+//= {getenv("MYSQL_SERVER"),getenv("MYSQL_USERNAME"),getenv("MYSQL_PASSWORD"),getenv("MYSQL_DATABASE")};
 void handle_sigint(int signal);
 void handle_sigusr1(int signal);
 void handle_sigusr2(int signal);
@@ -235,6 +238,10 @@ int main(int argc, char *argv[])
 #endif
 
 
+    mysql_config.server=getenv("MYSQL_SERVER");
+    mysql_config.user=getenv("MYSQL_USERNAME");
+    mysql_config.password=getenv("MYSQL_PASSWORD");
+    mysql_config.database=getenv("MYSQL_DATABASE");
 #ifdef WIN32
 	GetSystemTime(&st);
 	srand(st.wSecond + st.wMilliseconds);
