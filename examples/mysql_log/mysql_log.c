@@ -11,20 +11,50 @@
 
 #include <mosquitto.h>
 #include <mysql/mysql.h>
+#include "cJSON.h"
 
 #define db_host "localhost"
-#define db_username "mqtt_log"
-#define db_password "password"
-#define db_database "mqtt_log"
+#define db_username "root"
+#define db_password "mysql"
+#define db_database "mqtt_data"
 #define db_port 3306
 
-#define db_query "INSERT INTO mqtt_log (topic, payload) VALUES (?,?)"
+//#define db_query "INSERT INTO temphumi_mysql2 (topic, payload,source) VALUES (?,?,?)"
+#define db_query "INSERT INTO ph (id) VALUES (?)"
+//#define db_query "INSERT INTO temphumi_mysql (topic, payload,source,parent,temp,voltage,temp_2,humidity,sensorX,sensorY,sensorZ) VALUES (?,?,?,?,?,?,?,?,?,?,?)"
+//#define db_query "INSERT INTO mqtt_mysql (topic, payload) VALUES (?,?)"
+/* db_query_2 orp,ph*/
+#define db_query_2 "INSERT INTO mqtt_log (topic,payload,msgtime,msgdate) VALUES(?,?,now(),current_time())"
+
 
 #define mqtt_host "localhost"
 #define mqtt_port 1883
 
+#define TOPICLEN  100
+#define PAYLOADLEN 200
+
 static int run = 1;
 static MYSQL_STMT *stmt = NULL;
+static MYSQL_STMT *stmt_2 = NULL;
+
+char msgtopic[TOPICLEN];
+unsigned long msgtopic_len;
+char msgpayload[PAYLOADLEN];
+unsigned long msgpayload_len;
+
+
+
+int msgsource;
+int msgparent;
+int msgtemp;
+int msgvoltage;
+int msgtemp_2;
+int msghumidity;
+int msgsensorX;
+int msgsensorY;
+int msgsensorZ;
+unsigned long len = 0L;
+
 
 void handle_signal(int s)
 {
@@ -37,17 +67,217 @@ void connect_callback(struct mosquitto *mosq, void *obj, int result)
 
 void message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message)
 {
-	MYSQL_BIND bind[2];
+	cJSON* rootJsonObj;
+	cJSON* itemJsonObj;
 
-	memset(bind, 0, sizeof(bind));
+	msgsource=-1;
+	msgparent=-1;
+	msgtemp=-1;
+	msgvoltage=-1;
+	msgtemp_2=-1;
+	msghumidity=-1;
+	msgsensorX=-1;
+	msgsensorY=-1;
+	msgsensorZ=-1;
 
-	bind[0].buffer_type = MYSQL_TYPE_STRING;
-	bind[0].buffer = message->topic;
-	bind[1].buffer_type = MYSQL_TYPE_STRING;
-	bind[1].buffer = message->payload;
+	strncpy(msgtopic, message->topic, TOPICLEN); /* string  */
+    msgtopic_len= strlen(msgtopic);
 
-	mysql_stmt_bind_param(stmt, bind);
-	mysql_stmt_execute(stmt);
+	strncpy(msgpayload, message->payload, PAYLOADLEN); /* string  */
+    msgpayload_len= strlen(msgpayload);
+
+	printf("recv topic[%s] payload. \n", msgtopic);
+
+    if(!strcmp("ph",msgtopic) && !strcmp("ph_temp",msgtopic) && !strcmp("orp",msgtopic) && !strcmp("orp_temp",msgtopic))
+    {
+        rootJsonObj = cJSON_Parse(msgpayload);
+        if(NULL == rootJsonObj){
+            fprintf(stderr, "Error: cJSON_Parse fail. \n");
+            return;
+        }else{
+            printf("json parse succeed.\n");
+        }
+
+        //source
+        itemJsonObj = cJSON_GetObjectItem(rootJsonObj, "source");
+        if(itemJsonObj!=NULL){
+            msgsource = itemJsonObj->valueint;
+            printf("source=%ld. ", msgsource);
+        }
+
+        //parent
+        itemJsonObj = cJSON_GetObjectItem(rootJsonObj, "parent");
+        if(itemJsonObj!=NULL){
+            msgparent = itemJsonObj->valueint;
+        }
+
+        //temp
+        itemJsonObj = cJSON_GetObjectItem(rootJsonObj, "temp");
+        if(itemJsonObj!=NULL){
+            msgtemp = itemJsonObj->valueint;
+            printf("msgtemp=%d. ", msgtemp);
+        }
+
+        //voltage
+        itemJsonObj = cJSON_GetObjectItem(rootJsonObj, "voltage");
+        if(itemJsonObj!=NULL){
+            msgvoltage = itemJsonObj->valueint;
+        }
+
+        //temp_2
+        itemJsonObj = cJSON_GetObjectItem(rootJsonObj, "temp_2");
+        if(itemJsonObj!=NULL){
+            msgtemp_2 = itemJsonObj->valueint;
+            printf("msgtemp_2=%d. ", msgtemp_2);
+        }
+
+        //humidity
+        itemJsonObj = cJSON_GetObjectItem(rootJsonObj, "humidity");
+        if(itemJsonObj!=NULL){
+            msghumidity = itemJsonObj->valueint;
+            printf("msghumidity=%d. ", msghumidity);
+        }
+
+        //sensorX
+        itemJsonObj = cJSON_GetObjectItem(rootJsonObj, "sensorX");
+        if(itemJsonObj!=NULL){
+            msgsensorX = itemJsonObj->valueint;
+        }
+
+        //sensorY
+        itemJsonObj = cJSON_GetObjectItem(rootJsonObj, "sensorY");
+        if(itemJsonObj!=NULL){
+            msgsensorY = itemJsonObj->valueint;
+        }
+
+        //sensorZ
+        itemJsonObj = cJSON_GetObjectItem(rootJsonObj, "sensorZ");
+        if(itemJsonObj!=NULL){
+            msgsensorZ = itemJsonObj->valueint;
+        }
+
+        MYSQL_BIND bind[11];
+        //MYSQL_BIND bind[3];
+
+        memset(bind, 0, sizeof(bind));
+
+        //Topic
+        bind[0].buffer_type = MYSQL_TYPE_STRING;
+        bind[0].buffer = (char*)msgtopic;
+        bind[0].buffer_length = TOPICLEN;
+        bind[0].is_null= 0;
+        bind[0].length= &msgtopic_len;
+
+        //Payload
+        bind[1].buffer_type = MYSQL_TYPE_STRING;
+        bind[1].buffer = (char*)msgpayload;
+        bind[1].buffer_length = PAYLOADLEN;
+        bind[1].is_null= 0;
+        bind[1].length= &msgpayload_len;
+
+        //Source
+        bind[2].buffer_type = MYSQL_TYPE_LONG;
+        bind[2].buffer = (char*)&msgsource;
+        bind[2].is_null= 0;
+        bind[2].length= 0;
+
+
+        //Parent
+        bind[3].buffer_type = MYSQL_TYPE_LONG;
+        bind[3].buffer = (char*)&msgparent;
+        bind[3].is_null= 0;
+        bind[3].length= 0;
+
+        //temp
+        bind[4].buffer_type = MYSQL_TYPE_LONG;
+        bind[4].buffer = (char*)&msgtemp;
+        bind[4].is_null= 0;
+        bind[4].length= 0;
+
+        //voltage
+        bind[5].buffer_type = MYSQL_TYPE_LONG;
+        bind[5].buffer = (int*)&msgvoltage;
+        bind[5].is_null= 0;
+        bind[5].length= 0;
+
+        //temp_2
+        bind[6].buffer_type = MYSQL_TYPE_LONG;
+        bind[6].buffer = (char*)&msgtemp_2;
+        bind[6].is_null= 0;
+        bind[6].length= 0;
+
+        //humidity
+        bind[7].buffer_type = MYSQL_TYPE_LONG;
+        bind[7].buffer = (char*)&msghumidity;
+        bind[7].is_null= 0;
+        bind[7].length= 0;
+
+        //sensorX
+        bind[8].buffer_type = MYSQL_TYPE_LONG;
+        bind[8].buffer = (char*)&msgsensorX;
+        bind[8].is_null=0;
+        bind[8].length= 0;
+
+        //sensorY
+        bind[9].buffer_type = MYSQL_TYPE_LONG;
+        bind[9].buffer = (char*)&msgsensorY;
+        bind[9].is_null= 0;
+        bind[9].length= 0;
+
+        //sensorZ
+        bind[10].buffer_type = MYSQL_TYPE_LONG;
+        bind[10].buffer = (char*)&msgsensorZ;
+        bind[10].is_null= 0;
+        bind[10].length= 0;
+
+        /* Bind the buffers */
+        if (mysql_stmt_bind_param(stmt, bind))
+        {
+            fprintf(stderr, " mysql_stmt_bind_param() failed\n");
+            fprintf(stderr, " %s\n", mysql_stmt_error(stmt));
+        }
+
+        /* Execute the INSERT statement - 1*/
+        printf("start mysql_stmt_execute...\n");
+        if (mysql_stmt_execute(stmt))
+        {
+            fprintf(stderr, " mysql_stmt_execute(), 1 failed\n");
+            fprintf(stderr, " %s\n", mysql_stmt_error(stmt));
+        }
+
+        printf("mysql_stmt_execute succeed. \n");
+
+        cJSON_Delete(rootJsonObj);
+        printf("cJSON_Delete succeed. \n");
+    }
+    else
+    {
+        MYSQL_BIND bind[2];
+
+        memset(bind, 0, sizeof(bind));
+    //    memset(msgtopic, 0, sizeof(msgtopic));
+    //    memset(msgpayload, 0, sizeof(msgpayload));
+    //    strncpy(msgtopic,message->topic,strlen(message->topic));
+    //    msgtopic_len = strlen(msgtopic);
+     //   strncpy(msgpayload, message->payload, strlen(message->payload)); /* string  */
+     //   msgpayload_len= strlen(msgpayload);
+        bind[0].buffer_type = MYSQL_TYPE_STRING;
+        bind[0].buffer = (char*)msgtopic;
+        bind[0].buffer_length = msgtopic_len;
+        bind[0].is_null= 0;
+        bind[0].length= &msgtopic_len;
+        printf("topic %s\n",bind[0].buffer);
+        bind[1].buffer_type = MYSQL_TYPE_STRING;
+        bind[1].buffer = (char*)msgpayload;
+        bind[1].buffer_length = msgpayload_len;//PAYLOADLEN;
+        bind[1].is_null= 0;
+        bind[1].length= &msgpayload_len;
+        printf("payload %s\n",bind[1].buffer);
+
+        mysql_stmt_bind_param(stmt_2, bind);
+        mysql_stmt_execute(stmt_2);
+
+    }
 }
 
 int main(int argc, char *argv[])
@@ -55,6 +285,7 @@ int main(int argc, char *argv[])
 	MYSQL *connection;
 	my_bool reconnect = true;
 	char clientid[24];
+
 	struct mosquitto *mosq;
 	int rc = 0;
 
@@ -73,8 +304,10 @@ int main(int argc, char *argv[])
 
 		if(connection){
 			stmt = mysql_stmt_init(connection);
+			stmt_2 = mysql_stmt_init(connection);
 
 			mysql_stmt_prepare(stmt, db_query, strlen(db_query));
+			mysql_stmt_prepare(stmt_2, db_query_2, strlen(db_query_2));
 
 			memset(clientid, 0, 24);
 			snprintf(clientid, 23, "mysql_log_%d", getpid());
@@ -98,6 +331,7 @@ int main(int argc, char *argv[])
 				mosquitto_destroy(mosq);
 			}
 			mysql_stmt_close(stmt);
+			mysql_stmt_close(stmt_2);
 
 			mysql_close(connection);
 		}else{
@@ -115,4 +349,5 @@ int main(int argc, char *argv[])
 
 	return rc;
 }
+
 

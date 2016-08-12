@@ -1,0 +1,5 @@
+export PATH="$PATH:~/wrtnode/OpenWrt-Toolchain-ramips-for-mipsel_24kec+dsp-gcc-4.8-linaro_uClibc-0.9.33.2/toolchain-mipsel_24kec+dsp_gcc-4.8-linaro_uClibc-0.9.33.2/bin"
+export MYSQL_SERVER="localhost"
+export MYSQL_PASSWORD="mysql"
+export MYSQL_USERNAME="root"
+export MYSQL_DATABASE="mqtt_data"
